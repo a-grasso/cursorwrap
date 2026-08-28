@@ -5,7 +5,7 @@ let VERSION = "cursorwrap-proto 0.2 (continuous)"
 // MARK: - config
 
 struct Config {
-    var minOvershoot: Double = 40   // intended travel past the edge before crossing
+    var minOvershoot: Double = 6    // intended travel past the edge before crossing
     var carryMax: Double = 0        // how far past the far edge to land (0 = on the edge)
     var cooldown: Double = 0.05     // seconds after a crossing during which edges are ignored
     var vertical = false
@@ -64,7 +64,7 @@ while ai < argv.count {
 
           --displays          print display geometry and exit
           --log PATH          mirror output to PATH (truncated each run)
-          --min-overshoot N   intended travel past the edge before crossing (default 40)
+          --min-overshoot N   intended travel past the edge before crossing (default 6)
           --carry-max N       land N px past the far edge (default 0 = on the edge)
           --cooldown S        seconds to ignore edges after a crossing (default 0.05)
           --vertical          also wrap top <-> bottom
