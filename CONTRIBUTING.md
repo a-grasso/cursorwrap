@@ -9,7 +9,7 @@ Small tool. Issues and pull requests both welcome.
 open -a "$PWD/CursorWrap.app"       # launch the bundle, not the inner binary
 ```
 
-`build.sh` keeps `Info.plist` in step with the `VERSION` constant in
+`build.sh` keeps `Info.plist` in step with the `version` constant in
 `main.swift`, so change the version in one place only.
 
 For anything you can observe from a terminal, run the binary in the foreground
@@ -77,13 +77,13 @@ browser to render either one.
 
 ## Cutting a release
 
-Maintainers only. Bump `VERSION` in `main.swift`, commit, then:
+Maintainers only. Bump `version` in `main.swift`, commit, then:
 
 ```sh
 git tag -a v0.1.1 -m v0.1.1 && git push origin v0.1.1
 ```
 
-`.github/workflows/release.yml` refuses a tag that disagrees with `VERSION`,
+`.github/workflows/release.yml` refuses a tag that disagrees with `version`,
 creates the GitHub release, and commits the rendered formula to
 `a-grasso/homebrew-tap`. Release notes are generated from commits, so write
 commit subjects that read well in a changelog.
