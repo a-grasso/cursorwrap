@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build the app bundle
         run: ./build.sh
@@ -44,7 +44,7 @@ jobs:
     # by which point a syntax error is already in the tap.
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Rendered formula parses as Ruby
         run: |
           sed -e "s/@@VERSION@@/0.0.0/" -e "s/@@SHA256@@/$(printf '0%.0s' {1..64})/" \
