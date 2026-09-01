@@ -125,8 +125,20 @@ mouse events keep delivering deltas.
 3. **Relocate by posting a move event** carrying the original deltas, and swallow
    the clamped one. `CGWarpMouseCursorPosition` briefly dissociates the cursor
    and drops those deltas, so the pointer arrives dead.
-4. **Reachable span per row.** The desktop is not a rectangle - displays can be
-   offset vertically, so the furthest edge depends on where you are.
+4. **Wrap within the contiguous run.** The desktop is not a rectangle and, along
+   a single axis, need not even be gap-free: displays sit at different offsets,
+   get stacked, or touch only through a third screen. So the reachable extent is
+   not the whole desktop's - it is the run of displays that actually joins up at
+   the pointer's position on the other axis. Both the wall and the display you
+   land on come from that same run, which is what makes the wrap adapt to any
+   arrangement instead of to one particular desk.
+
+Measuring the wall per row but picking the destination from the whole desktop is
+what fired the pointer at a far display's clamped corner as soon as the
+arrangement stopped being a simple rectangle - and what made the bug show up on
+one side only, then swap sides when the displays were rearranged.
+[tests/spans.swift](tests/spans.swift) pins the behaviour down across side-by-side,
+mirrored, stacked and bridged arrangements; run it with `./tests/run.sh`.
 
 Things that do not work, in case you try them: accumulating push after the
 pointer is clamped (it sits motionless at the wall for 150-350ms while you
@@ -140,7 +152,8 @@ land, not whether you stop).
   event. Reduced to a single event, not zero.
 - Apps that capture the pointer (games, VMs, screen sharing) are not excluded.
 - Absolute-mode devices (tablets) have no usable delta accumulation.
-- Vertical wrap is implemented but lightly tested.
+- Vertical wrap (`--vertical`) is off by default. Its geometry is covered by
+  the tests, but it has had far less real-world use than horizontal.
 - Ad-hoc signed, so **every rebuild - including a `brew upgrade` - invalidates
   the Accessibility grant**. Run `tccutil reset Accessibility
   dev.agrasso.cursorwrap` and re-approve. A real signing identity removes this.
