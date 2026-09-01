@@ -1,6 +1,6 @@
 # Contributing
 
-Small tool, no ceremony. Issues and pull requests both welcome.
+Small tool. Issues and pull requests both welcome.
 
 ## Build and run
 
@@ -33,7 +33,7 @@ invalidates the grant. While iterating:
 tccutil reset Accessibility dev.agrasso.cursorwrap
 ```
 
-then re-approve. This is why `--dry-run` in a terminal is the preferred loop.
+then re-approve. So `--dry-run` in a terminal is the preferred loop.
 
 ## What CI enforces
 
@@ -76,7 +76,7 @@ commit subjects that read well in a changelog.
 
 ## Known open problems
 
-Listed under "Limitations" in the README. The two worth the most:
+Listed under "Limitations" in the README, chiefly:
 
 - Apps that capture the pointer (games, VMs, screen sharing) are not excluded.
 - A real signing identity would stop rebuilds invalidating the Accessibility
