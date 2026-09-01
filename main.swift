@@ -2,7 +2,7 @@ import Cocoa
 
 // Single source of truth for the shipped version: build.sh reads it out of
 // here for Info.plist, and the release workflow refuses a tag that disagrees.
-let version = "0.1.0"
+let version = "0.1.1"
 
 // MARK: - config
 
