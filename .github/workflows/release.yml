@@ -20,6 +20,10 @@ permissions:
 jobs:
   release:
     runs-on: macos-14
+    # Job-level so the publish step's `if:` can see it. A step's own `env:` is
+    # not in scope for that step's own `if:`.
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
@@ -64,9 +68,12 @@ jobs:
           done
           echo "sha256=$(shasum -a 256 src.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
+      # Skip rather than fail where the secret is absent - a fork, or a tag
+      # pushed before the PAT is in place, should still get its release instead
+      # of a red run at `git clone`.
       - name: Publish formula to tap
+        if: ${{ env.TAP_TOKEN != '' }}
         env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ steps.v.outputs.version }}
           SHA256: ${{ steps.sha.outputs.sha256 }}
         run: |

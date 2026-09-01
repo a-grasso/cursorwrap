@@ -1,0 +1,81 @@
+name: Bug report
+description: Something does not wrap, wraps when it should not, or crashes
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Wrapping behaviour depends entirely on your display geometry, so the
+        `--displays` output below is the single most useful thing you can give.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `cursorwrap --version`.
+      placeholder: cursorwrap 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "14.6.1 (Apple Silicon)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: displays
+    attributes:
+      label: Display geometry
+      description: Output of `cursorwrap --displays`.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: flags
+    attributes:
+      label: Flags
+      description: How cursorwrap was started, including defaults you changed.
+      placeholder: --min-overshoot 15 --vertical
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How it was installed
+      options:
+        - Homebrew tap (brew install a-grasso/tap/cursorwrap)
+        - Built from source (./build.sh)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: trace
+    attributes:
+      label: Crossing trace
+      description: >
+        If the problem is about when it does or does not cross, run
+        `cursorwrap --verbose --dry-run` in a terminal, reproduce it, and paste
+        the output. `--dry-run` does not move the pointer, so this is safe.
+      render: text
+
+  - type: input
+    id: pointing-device
+    attributes:
+      label: Pointing device
+      description: >
+        Absolute-mode devices (tablets) are a known limitation.
+      placeholder: Magic Trackpad / Logitech MX Master / Wacom tablet

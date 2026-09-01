@@ -224,6 +224,11 @@ func tapCB(proxy: CGEventTapProxy,
         return nil
     }
 
+    // The landing point is always pinned inside the destination display: the
+    // travel axis to its last addressable pixel (`max - 1`), the cross axis one
+    // further in (`max - 2`), because `loc` on the other axis came from a
+    // display whose extent need not match this one's.
+
     // --- horizontal ---
     if let span = rowSpan(atY: loc.y) {
         // Where this movement wanted to put the pointer, had the desktop continued.

@@ -43,7 +43,8 @@ cd cursorwrap
 open -a "$PWD/CursorWrap.app"
 ```
 
-Grant Accessibility when prompted, then relaunch:
+Grant Accessibility when prompted, then relaunch - substituting your own
+checkout for the brew path if you built from source:
 
 ```sh
 pkill -f CursorWrap.app
@@ -94,6 +95,7 @@ grant to the app bundle. Point it at your own checkout if you built from source.
 | `--cooldown S` | 0.05 | ignore edges for S after a crossing |
 | `--vertical` | off | also wrap top ↔ bottom |
 | `--wrap-drag` | off | cross while a button is held |
+| `--warp` | off | relocate via `CGWarp` instead of a synthetic move |
 | `--displays` | | print display geometry, exit |
 | `--version` | | print the version, exit |
 | `--dry-run` | | log crossings without moving |
@@ -137,6 +139,11 @@ land, not whether you stop).
 - Ad-hoc signed, so **every rebuild - including a `brew upgrade` - invalidates
   the Accessibility grant**. Run `tccutil reset Accessibility
   dev.agrasso.cursorwrap` and re-approve. A real signing identity removes this.
+
+## Contributing
+
+Issues and pull requests welcome - see [CONTRIBUTING.md](CONTRIBUTING.md)
+for the build loop, what CI enforces, and the open problems worth taking.
 
 ## License
 
