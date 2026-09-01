@@ -40,6 +40,7 @@ then re-approve. So `--dry-run` in a terminal is the preferred loop.
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request:
 
 - the app bundle builds
+- the geometry tests pass (`./tests/run.sh`)
 - `main.swift`, the binary's `--version`, and `Info.plist` agree on the version
 - the bundle is signed
 - `--help` and `--displays` exit clean, and an unknown flag fails
@@ -47,6 +48,24 @@ then re-approve. So `--dry-run` in a terminal is the preferred loop.
 
 `--displays` is checked because CI runners have no displays - the flag has to
 exit cleanly on an empty display list rather than trap.
+
+## Testing the geometry
+
+`./tests/run.sh` rebuilds `main.swift` with `-DCURSORWRAP_TESTS`, which swaps the
+event tap for [tests/spans.swift](tests/spans.swift) as the entry point, and
+drives the real `span()` and `crossing()` over synthetic arrangements. It needs
+no display, no pointer and no Accessibility grant, which is why it is the one
+part of the behaviour that runs on a CI box.
+
+The arrangements are the point: side by side in both orders, stacked, and two
+displays joined only through a third. A wrap that is correct on your own desk
+can still be wrong on the mirror image of it, so **add the arrangement before
+you change the geometry**. The tests deliberately model macOS's clamping
+themselves, one pixel at a time, rather than asking `span()` where the wall is -
+otherwise a bug in `span()` would hide behind the test's own idea of the answer.
+
+To see how a real desk is being read, run `--displays`: it prints, per display,
+which span each band of the other axis wraps within.
 
 ## Changing behaviour
 

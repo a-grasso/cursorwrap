@@ -14,6 +14,14 @@ jobs:
       - name: Build the app bundle
         run: ./build.sh
 
+      - name: Geometry holds across display arrangements
+        run: |
+          # The pointer geometry is the one part a runner can exercise: no
+          # display, pointer or Accessibility grant needed, because the tests
+          # drive span()/crossing() over synthetic arrangements. Cheap, and it
+          # catches the class of bug that only shows up on someone else's desk.
+          ./tests/run.sh
+
       - name: Binary and bundle agree on the version
         run: |
           src_version="$(sed -n 's/^let version = "\(.*\)"$/\1/p' main.swift)"

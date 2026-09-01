@@ -29,8 +29,16 @@ and no framework beyond Cocoa.
 - **Dev loop:** `./CursorWrap.app/Contents/MacOS/cursorwrap --verbose --dry-run`.
   In the foreground the grant belongs to your terminal, which is the only
   comfortable way to work on the detection logic.
-- **Test:** there is no test suite. `.github/workflows/ci.yml` is the gate on
-  every push to `main` and every PR: the bundle builds, `main.swift` /
+- **Test:** `./tests/run.sh` - rebuilds `main.swift` with the event tap swapped
+  for [tests/spans.swift](tests/spans.swift) and drives the real `span()` and
+  `crossing()` over synthetic display arrangements. No display, pointer or
+  Accessibility grant needed, so it is the one part of the behaviour that runs
+  anywhere. Add an arrangement here before changing the geometry.
+- **Inspect an arrangement:** `--displays` prints, per display, which span each
+  band of the other axis actually wraps within - the fastest way to see why a
+  particular desk behaves the way it does.
+- **CI:** `.github/workflows/ci.yml` is the gate on every push to `main` and
+  every PR: the bundle builds, the geometry tests pass, `main.swift` /
   `--version` / `Info.plist` agree on the version, the bundle is signed,
   `--help` and `--displays` exit clean, an unknown flag fails, and the formula
   template still renders to valid Ruby.
