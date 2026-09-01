@@ -38,7 +38,7 @@ body:
     attributes:
       label: Display geometry
       description: Output of `cursorwrap --displays`.
-      render: text
+      render: shell
     validations:
       required: true
 
@@ -70,7 +70,7 @@ body:
         If the problem is about when it does or does not cross, run
         `cursorwrap --verbose --dry-run` in a terminal, reproduce it, and paste
         the output. `--dry-run` does not move the pointer, so this is safe.
-      render: text
+      render: shell
 
   - type: input
     id: pointing-device
