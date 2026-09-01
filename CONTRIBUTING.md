@@ -61,6 +61,20 @@ easy enough to feel effortless, without making it impossible to park the pointer
 on something that lives at the screen edge - a scrollbar, a window close button,
 or a window being dragged to the edge.
 
+## Artwork
+
+Both images in the repository are HTML rendered headless by a Chromium, so the
+source of each is a page you can open in a browser and edit:
+
+| Source | Output | Rebuild with |
+| --- | --- | --- |
+| `icon/icon.html` | `icon/AppIcon.icns`, the bundle icon | `./icon/make.sh` |
+| `.social/card.html` | `.social/social-preview.png` | see `.social/README.md` |
+
+Never hand-edit the `.icns` or the `.png`. Commit the rebuilt output alongside
+the page: a Homebrew install compiles from the release tarball and has no
+browser to render either one.
+
 ## Cutting a release
 
 Maintainers only. Bump `VERSION` in `main.swift`, commit, then:

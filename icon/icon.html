@@ -1,0 +1,68 @@
+<!doctype html>
+<meta charset="utf-8">
+<!--
+  Source of AppIcon.icns. Rendered headless at 1024x1024 on a transparent
+  background; see README.md in this directory.
+
+  Geometry follows Apple's macOS icon grid: a 1024 canvas with the rounded
+  square inset to 824x824, corner radius 185.4. Everything else is clipped to
+  that square, so the pointer's path can run off the edge without bleeding
+  into the corners the system rounds away.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1024px; height: 1024px; overflow: hidden; background: transparent; }
+  svg { display: block; }
+</style>
+
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <clipPath id="square">
+      <rect x="100" y="100" width="824" height="824" rx="185.4"/>
+    </clipPath>
+    <linearGradient id="plate" x1=".15" y1="0" x2=".85" y2="1">
+      <stop offset="0" stop-color="#1a2331"/>
+      <stop offset="1" stop-color="#070a10"/>
+    </linearGradient>
+    <!-- the same cyan bloom the social card carries in its lower right -->
+    <radialGradient id="bloom" cx=".84" cy="1.02" r=".82">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity=".26"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <!-- fades out toward the right edge, where the pointer left the desktop -->
+    <linearGradient id="trail" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity=".3"/>
+      <stop offset=".26" stop-color="#22d3ee" stop-opacity=".85"/>
+      <stop offset="1" stop-color="#a8eefb"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="26"/></filter>
+  </defs>
+
+  <g clip-path="url(#square)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#plate)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#bloom)"/>
+
+    <g transform="translate(0,20)">
+      <!-- out through the right edge, under the desktop, back up on the left -->
+      <g id="wrap">
+        <path d="M 960 322 L 780 322 Q 692 322 692 410 L 692 686 Q 692 774 604 774
+                 L 408 774 Q 320 774 320 686 L 320 616"
+              stroke="url(#trail)" stroke-width="58" stroke-linecap="round"/>
+        <!-- base sits below the stroke's round cap, so the two read as one arrow -->
+        <path d="M 262 604 L 320 486 L 378 604 Z" fill="#a8eefb"/>
+      </g>
+      <use href="#wrap" filter="url(#glow)" opacity=".55"/>
+      <use href="#wrap"/>
+
+      <!-- the pointer, arrived on the far side, still moving -->
+      <g transform="translate(296,192) scale(8.4)">
+        <path d="M0 0 L0 26 L6.6 19.6 L11 30 L16.4 27.6 L12 17.6 L21 17 Z"
+              fill="#ffffff" stroke="#0b0f16" stroke-width="1.3"/>
+      </g>
+    </g>
+
+    <!-- hairline lip, so the plate has an edge against a dark wallpaper -->
+    <rect x="100" y="100" width="824" height="824" rx="185.4"
+          fill="none" stroke="#ffffff" stroke-opacity=".07" stroke-width="4"/>
+  </g>
+</svg>

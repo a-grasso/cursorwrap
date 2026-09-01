@@ -9,8 +9,10 @@ VERSION="$(sed -n 's/^let version = "\(.*\)"$/\1/p' main.swift)"
 [ -n "$VERSION" ] || { echo "cannot read VERSION from main.swift" >&2; exit 1; }
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 swiftc -O -o "$APP/Contents/MacOS/cursorwrap" main.swift
+# Prebuilt because rendering it needs a browser; see icon/make.sh.
+cp icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -19,6 +21,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>dev.agrasso.cursorwrap</string>
   <key>CFBundleName</key><string>CursorWrap</string>
   <key>CFBundleExecutable</key><string>cursorwrap</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundleVersion</key><string>${VERSION}</string>

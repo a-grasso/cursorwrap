@@ -1,3 +1,5 @@
 CursorWrap.app/
 *.log
 *.bak
+icon/AppIcon.iconset/
+icon/icon@1024.png

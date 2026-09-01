@@ -26,6 +26,15 @@ jobs:
             echo "Info.plist says '$plist_version', main.swift says '$src_version'" >&2; exit 1; }
           echo "version $src_version consistent across binary and bundle"
 
+      - name: Bundle carries its icon
+        run: |
+          # A plist naming an icon the Resources folder does not hold is what
+          # leaves a generic placeholder in the Accessibility list.
+          name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' \
+            CursorWrap.app/Contents/Info.plist)"
+          test -f "CursorWrap.app/Contents/Resources/$name.icns"
+          echo "bundle icon $name.icns present"
+
       - name: Bundle is signed
         run: codesign --verify --strict CursorWrap.app
 
