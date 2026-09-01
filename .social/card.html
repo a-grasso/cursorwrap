@@ -1,0 +1,106 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    background: #0b0f16;
+    background-image:
+      radial-gradient(900px 420px at 78% 116%, rgba(34,211,238,.16), transparent 62%),
+      radial-gradient(680px 340px at 6% -14%, rgba(99,102,241,.14), transparent 60%);
+    font-family: "SF Pro Display", -apple-system, system-ui, sans-serif;
+    color: #e6edf6;
+    position: relative;
+  }
+  /* faint grid, so the flat panels have something to sit on */
+  body::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,.028) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,.028) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(1000px 560px at 50% 45%, #000 30%, transparent 78%);
+  }
+  .wrap { position: relative; padding: 68px 76px 0; }
+
+  .name {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 76px; font-weight: 700; letter-spacing: -2.6px;
+    line-height: 1;
+  }
+  .name .c { color: #22d3ee; }
+  .tag {
+    margin-top: 20px;
+    font-size: 33px; font-weight: 500; letter-spacing: -.7px;
+    color: #9fb0c6;
+  }
+  .tag b { color: #e6edf6; font-weight: 600; }
+  .sub { margin-top: 15px; font-size: 21px; font-weight: 400; color: #6d7f95; letter-spacing: -.2px; }
+
+  svg.diagram { position: absolute; left: 0; top: 248px; width: 1280px; height: 300px; }
+
+  .install {
+    position: absolute; left: 76px; bottom: 44px;
+    font-family: Monaco, ui-monospace, monospace;
+    font-size: 23px; color: #7488a0; letter-spacing: -.3px;
+  }
+  .install span { color: #22d3ee; }
+  .os {
+    position: absolute; right: 76px; bottom: 48px;
+    font-family: Monaco, ui-monospace, monospace;
+    font-size: 18px; color: #55677e; letter-spacing: .4px;
+  }
+</style>
+
+<div class="wrap">
+  <div class="name"><span class="c">cursor</span>wrap</div>
+  <div class="tag">Your monitors, <b>as a loop</b>.</div>
+  <div class="sub">Push past the outer edge, arrive on the far side, still moving.</div>
+</div>
+
+<svg class="diagram" viewBox="0 0 1280 300" fill="none">
+  <defs>
+    <linearGradient id="arrowGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"   stop-color="#22d3ee" stop-opacity=".25"/>
+      <stop offset=".42" stop-color="#22d3ee" stop-opacity=".95"/>
+      <stop offset="1"   stop-color="#7dd3fc" stop-opacity="1"/>
+    </linearGradient>
+    <filter id="glow" x="-25%" y="-60%" width="150%" height="250%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- ultrawide: 5120x1440, sits left and reaches higher than the laptop -->
+  <rect x="110" y="30" width="580" height="165" rx="9" fill="#111925" stroke="#2b3a4f" stroke-width="2.5"/>
+  <rect x="110" y="30" width="580" height="24" rx="9" fill="#18232f"/>
+  <text x="400" y="120" text-anchor="middle" font-family="SF Mono, Menlo, monospace"
+        font-size="17" fill="#5d7a95" letter-spacing="1.4">ULTRAWIDE</text>
+
+  <!-- laptop: 1728x1117, bottom-aligned with the ultrawide -->
+  <rect x="716" y="78" width="192" height="117" rx="8" fill="#111925" stroke="#2b3a4f" stroke-width="2.5"/>
+  <rect x="716" y="78" width="192" height="21" rx="8" fill="#18232f"/>
+  <text x="812" y="146" text-anchor="middle" font-family="SF Mono, Menlo, monospace"
+        font-size="14" fill="#5d7a95" letter-spacing="1.2">LAPTOP</text>
+  <rect x="762" y="201" width="100" height="7" rx="3.5" fill="#1b2736"/>
+
+  <!-- the wrap: out of the laptop's right edge, under the desk, in at the
+       ultrawide's left edge -->
+  <path d="M 908 136 L 1032 136 Q 1108 136 1108 190 Q 1108 244 1032 244
+           L 146 244 Q 70 244 70 190 Q 70 136 90 136"
+        stroke="url(#arrowGrad)" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+  <!-- arrowhead tip landing on the ultrawide's left edge -->
+  <path d="M 90 125 L 110 136 L 90 147 Z" fill="#9fe2fb"/>
+
+  <text x="589" y="276" text-anchor="middle" font-family="Monaco, ui-monospace, monospace"
+        font-size="18" fill="#8397ae" letter-spacing=".1">6,848 px you never drag back</text>
+
+  <!-- pointer, mid-crossing, just past the laptop's right edge -->
+  <g transform="translate(940,112)" filter="url(#glow)">
+    <path d="M0 0 L0 26 L6.6 19.6 L11 30 L16.4 27.6 L12 17.6 L21 17 Z"
+          fill="#ffffff" stroke="#0b0f16" stroke-width="1.6"/>
+  </g>
+</svg>
+
+<div class="install">brew install <span>a-grasso/tap/cursorwrap</span></div>
+<div class="os">macOS 14+</div>
