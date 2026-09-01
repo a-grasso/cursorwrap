@@ -2,7 +2,7 @@ import Cocoa
 
 // Single source of truth for the shipped version: build.sh reads it out of
 // here for Info.plist, and the release workflow refuses a tag that disagrees.
-let VERSION = "0.1.0"
+let version = "0.1.0"
 
 // MARK: - config
 
@@ -25,7 +25,7 @@ func fail(_ m: String) -> Never {
     exit(1)
 }
 
-var logFH: FileHandle? = nil
+var logFH: FileHandle?
 
 func openLog(_ path: String) {
     try? Data().write(to: URL(fileURLWithPath: path))
@@ -60,12 +60,12 @@ while ai < argv.count {
     case "-v", "--verbose": cfg.verbose = true
     case "--displays":      showDisplaysAndExit = true
     case "--version":
-        print("cursorwrap \(VERSION)")
+        print("cursorwrap \(version)")
         exit(0)
     case "--log":           openLog(nextArg("--log"))
     case "-h", "--help":
         print("""
-        cursorwrap \(VERSION)
+        cursorwrap \(version)
 
           --displays          print display geometry and exit
           --version           print the version and exit
@@ -127,7 +127,7 @@ refreshDisplays()
 CGDisplayRegisterReconfigurationCallback(reconfigCB, nil)
 
 if showDisplaysAndExit {
-    log("cursorwrap \(VERSION)")
+    log("cursorwrap \(version)")
     for (i, r) in displays.enumerated() {
         log(String(format: "display %d: x %.0f..%.0f  y %.0f..%.0f  (%.0f x %.0f)",
                    i, r.minX, r.maxX, r.minY, r.maxY, r.width, r.height))
@@ -137,14 +137,14 @@ if showDisplaysAndExit {
 
 // MARK: - state
 
-var lastLoc: CGPoint? = nil
+var lastLoc: CGPoint?
 var cooldownUntil: CFAbsoluteTime = 0
 var buttonsDown = 0
 var crossings = 0
-var tapRef: CFMachPort? = nil
+var tapRef: CFMachPort?
 
 // Our own synthetic moves come back through the tap; tag them so we ignore them.
-let CW_MAGIC: Int64 = 0x4357_5250
+let cwMagic: Int64 = 0x4357_5250
 let evSource = CGEventSource(stateID: .hidSystemState)
 
 // MARK: - event tap
@@ -171,7 +171,7 @@ func tapCB(proxy: CGEventTapProxy,
         break
     }
 
-    if event.getIntegerValueField(.eventSourceUserData) == CW_MAGIC { return pass }
+    if event.getIntegerValueField(.eventSourceUserData) == cwMagic { return pass }
 
     if displaysDirty { refreshDisplays() }
 
@@ -219,7 +219,7 @@ func tapCB(proxy: CGEventTapProxy,
         }
         moved.setIntegerValueField(.mouseEventDeltaX, value: Int64(dx))
         moved.setIntegerValueField(.mouseEventDeltaY, value: Int64(dy))
-        moved.setIntegerValueField(.eventSourceUserData, value: CW_MAGIC)
+        moved.setIntegerValueField(.eventSourceUserData, value: cwMagic)
         moved.post(tap: .cghidEventTap)
         return nil
     }
@@ -283,7 +283,7 @@ func tapCB(proxy: CGEventTapProxy,
 
 // MARK: - main
 
-log("cursorwrap \(VERSION)")
+log("cursorwrap \(version)")
 for (i, r) in displays.enumerated() {
     log(String(format: "display %d: x %.0f..%.0f  y %.0f..%.0f", i, r.minX, r.maxX, r.minY, r.maxY))
 }

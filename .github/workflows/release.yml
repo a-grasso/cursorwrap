@@ -37,7 +37,7 @@ jobs:
       - name: Refuse a tag that disagrees with VERSION
         run: |
           tag_version="${GITHUB_REF_NAME#v}"
-          src_version="$(sed -n 's/^let VERSION = "\(.*\)"$/\1/p' main.swift)"
+          src_version="$(sed -n 's/^let version = "\(.*\)"$/\1/p' main.swift)"
           if [ "$tag_version" != "$src_version" ]; then
             echo "tag $GITHUB_REF_NAME says $tag_version, main.swift says $src_version" >&2
             exit 1

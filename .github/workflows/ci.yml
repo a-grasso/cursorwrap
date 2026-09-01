@@ -16,7 +16,7 @@ jobs:
 
       - name: Binary and bundle agree on the version
         run: |
-          src_version="$(sed -n 's/^let VERSION = "\(.*\)"$/\1/p' main.swift)"
+          src_version="$(sed -n 's/^let version = "\(.*\)"$/\1/p' main.swift)"
           bin_version="$(./CursorWrap.app/Contents/MacOS/cursorwrap --version)"
           plist_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
             CursorWrap.app/Contents/Info.plist)"

@@ -5,7 +5,7 @@ APP="CursorWrap.app"
 
 # main.swift owns the version; reading it back out here keeps Info.plist from
 # drifting away from what `cursorwrap --version` reports.
-VERSION="$(sed -n 's/^let VERSION = "\(.*\)"$/\1/p' main.swift)"
+VERSION="$(sed -n 's/^let version = "\(.*\)"$/\1/p' main.swift)"
 [ -n "$VERSION" ] || { echo "cannot read VERSION from main.swift" >&2; exit 1; }
 
 rm -rf "$APP"
