@@ -1,3 +1,8 @@
+<p align="center">
+  <img src=".social/social-preview.png"
+       alt="Two displays side by side, an ultrawide and a laptop, with a glowing arrow leaving the laptop's right edge, looping below both, and arriving at the ultrawide's left edge.">
+</p>
+
 # cursorwrap
 
 Wraps the mouse pointer around the outer edges of a multi-display macOS desktop.
