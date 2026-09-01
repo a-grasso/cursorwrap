@@ -1,0 +1,57 @@
+class Cursorwrap < Formula
+  desc "Wrap the mouse pointer around the outer edges of a multi-display macOS desktop"
+  homepage "https://github.com/a-grasso/cursorwrap"
+  url "https://github.com/a-grasso/cursorwrap/archive/refs/tags/v@@VERSION@@.tar.gz"
+  sha256 "@@SHA256@@"
+  license "MIT"
+
+  # Built from source rather than shipped as a cask: the app is signed ad-hoc,
+  # and a downloaded ad-hoc bundle arrives quarantined and Gatekeeper-blocked.
+  # Compiling here produces an unquarantined bundle and needs only the command
+  # line tools Homebrew already requires.
+  depends_on macos: :sonoma
+
+  def install
+    system "./build.sh"
+    prefix.install "CursorWrap.app"
+    # The pointer wrapping wants the bundle (see caveats), but the same binary
+    # in the foreground is how --displays and --dry-run are meant to be used.
+    bin.install_symlink prefix/"CursorWrap.app/Contents/MacOS/cursorwrap"
+  end
+
+  def caveats
+    <<~EOS
+      Accessibility is granted to the app bundle, not to the binary, so start
+      cursorwrap with:
+
+        open -a #{opt_prefix}/CursorWrap.app
+
+      Approve it under System Settings > Privacy & Security > Accessibility,
+      then relaunch - a process denied at launch caches that answer and cannot
+      pick up the grant:
+
+        pkill -f CursorWrap.app
+        open -a #{opt_prefix}/CursorWrap.app
+
+      Every build is signed ad-hoc, so an upgrade invalidates the grant. After
+      one, reset and re-approve:
+
+        tccutil reset Accessibility dev.agrasso.cursorwrap
+
+      To start it at login, see the "Run at login" section of the README, using
+      #{opt_prefix}/CursorWrap.app as the path.
+    EOS
+  end
+
+  test do
+    assert_match "cursorwrap #{version}", shell_output("#{bin}/cursorwrap --version")
+
+    # A bundle whose Info.plist disagrees with the formula, or whose signature
+    # did not survive install, is one that fails a user's Accessibility grant
+    # rather than anything they would see here.
+    plist = (prefix/"CursorWrap.app/Contents/Info.plist").read
+    assert_match "dev.agrasso.cursorwrap", plist
+    assert_match version.to_s, plist
+    system "/usr/bin/codesign", "--verify", "--strict", prefix/"CursorWrap.app"
+  end
+end

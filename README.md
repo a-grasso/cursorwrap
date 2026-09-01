@@ -27,6 +27,16 @@ parked on the edge.
 ## Install
 
 ```sh
+brew install a-grasso/tap/cursorwrap
+open -a "$(brew --prefix cursorwrap)/CursorWrap.app"
+```
+
+The formula builds from source: the app is signed ad-hoc, and a downloaded
+ad-hoc bundle arrives quarantined and Gatekeeper-blocked.
+
+From source instead:
+
+```sh
 git clone https://github.com/a-grasso/cursorwrap
 cd cursorwrap
 ./build.sh
@@ -37,11 +47,15 @@ Grant Accessibility when prompted, then relaunch:
 
 ```sh
 pkill -f CursorWrap.app
-open -a "$PWD/CursorWrap.app"
+open -a "$(brew --prefix cursorwrap)/CursorWrap.app"
 ```
 
 The relaunch is required: a process denied at launch caches that answer and
 cannot pick up the grant.
+
+`brew install` also puts a `cursorwrap` command on `PATH`. It runs the same
+binary in the foreground, which is what `--displays` and `--dry-run` are for;
+there the Accessibility grant belongs to your terminal, not to the app bundle.
 
 ## Run at login
 
@@ -57,7 +71,7 @@ cannot pick up the grant.
   <array>
     <string>/usr/bin/open</string>
     <string>-a</string>
-    <string>/ABSOLUTE/PATH/TO/CursorWrap.app</string>
+    <string>/opt/homebrew/opt/cursorwrap/CursorWrap.app</string>
   </array>
   <key>RunAtLoad</key><true/>
 </dict>
@@ -69,7 +83,7 @@ launchctl load ~/Library/LaunchAgents/dev.agrasso.cursorwrap.plist
 ```
 
 Launch via `open`, not the inner binary - macOS must attribute the Accessibility
-grant to the app bundle.
+grant to the app bundle. Point it at your own checkout if you built from source.
 
 ## Options
 
@@ -81,6 +95,7 @@ grant to the app bundle.
 | `--vertical` | off | also wrap top ↔ bottom |
 | `--wrap-drag` | off | cross while a button is held |
 | `--displays` | | print display geometry, exit |
+| `--version` | | print the version, exit |
 | `--dry-run` | | log crossings without moving |
 | `--verbose` | | trace crossings |
 | `--log PATH` | | mirror output to a file |
@@ -119,9 +134,9 @@ land, not whether you stop).
 - Apps that capture the pointer (games, VMs, screen sharing) are not excluded.
 - Absolute-mode devices (tablets) have no usable delta accumulation.
 - Vertical wrap is implemented but lightly tested.
-- Ad-hoc signed, so **every rebuild invalidates the Accessibility grant**. Run
-  `tccutil reset Accessibility dev.agrasso.cursorwrap` and re-approve. A real
-  signing identity removes this.
+- Ad-hoc signed, so **every rebuild - including a `brew upgrade` - invalidates
+  the Accessibility grant**. Run `tccutil reset Accessibility
+  dev.agrasso.cursorwrap` and re-approve. A real signing identity removes this.
 
 ## License
 

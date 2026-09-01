@@ -1,6 +1,8 @@
 import Cocoa
 
-let VERSION = "cursorwrap-proto 0.2 (continuous)"
+// Single source of truth for the shipped version: build.sh reads it out of
+// here for Info.plist, and the release workflow refuses a tag that disagrees.
+let VERSION = "0.1.0"
 
 // MARK: - config
 
@@ -57,12 +59,16 @@ while ai < argv.count {
     case "--dry-run":       cfg.dryRun = true
     case "-v", "--verbose": cfg.verbose = true
     case "--displays":      showDisplaysAndExit = true
+    case "--version":
+        print("cursorwrap \(VERSION)")
+        exit(0)
     case "--log":           openLog(nextArg("--log"))
     case "-h", "--help":
         print("""
-        \(VERSION)
+        cursorwrap \(VERSION)
 
           --displays          print display geometry and exit
+          --version           print the version and exit
           --log PATH          mirror output to PATH (truncated each run)
           --min-overshoot N   intended travel past the edge before crossing (default 6)
           --carry-max N       land N px past the far edge (default 0 = on the edge)
@@ -121,7 +127,7 @@ refreshDisplays()
 CGDisplayRegisterReconfigurationCallback(reconfigCB, nil)
 
 if showDisplaysAndExit {
-    log(VERSION)
+    log("cursorwrap \(VERSION)")
     for (i, r) in displays.enumerated() {
         log(String(format: "display %d: x %.0f..%.0f  y %.0f..%.0f  (%.0f x %.0f)",
                    i, r.minX, r.maxX, r.minY, r.maxY, r.width, r.height))
@@ -272,7 +278,7 @@ func tapCB(proxy: CGEventTapProxy,
 
 // MARK: - main
 
-log(VERSION)
+log("cursorwrap \(VERSION)")
 for (i, r) in displays.enumerated() {
     log(String(format: "display %d: x %.0f..%.0f  y %.0f..%.0f", i, r.minX, r.maxX, r.minY, r.maxY))
 }

@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the app bundle
+        run: ./build.sh
+
+      - name: Binary and bundle agree on the version
+        run: |
+          src_version="$(sed -n 's/^let VERSION = "\(.*\)"$/\1/p' main.swift)"
+          bin_version="$(./CursorWrap.app/Contents/MacOS/cursorwrap --version)"
+          plist_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+            CursorWrap.app/Contents/Info.plist)"
+          [ "$bin_version" = "cursorwrap $src_version" ] || {
+            echo "binary says '$bin_version', main.swift says '$src_version'" >&2; exit 1; }
+          [ "$plist_version" = "$src_version" ] || {
+            echo "Info.plist says '$plist_version', main.swift says '$src_version'" >&2; exit 1; }
+          echo "version $src_version consistent across binary and bundle"
+
+      - name: Bundle is signed
+        run: codesign --verify --strict CursorWrap.app
+
+      - name: Argument parsing survives a build
+        run: |
+          ./CursorWrap.app/Contents/MacOS/cursorwrap --help > /dev/null
+          # No displays on a runner, but the flag must still exit clean rather
+          # than trap on an empty display list.
+          ./CursorWrap.app/Contents/MacOS/cursorwrap --displays > /dev/null
+          if ./CursorWrap.app/Contents/MacOS/cursorwrap --nonsense 2>/dev/null; then
+            echo "unknown argument did not fail" >&2; exit 1
+          fi
+
+  formula:
+    # The formula lives in packaging/ and is only exercised when a tag ships it,
+    # by which point a syntax error is already in the tap.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rendered formula parses as Ruby
+        run: |
+          sed -e "s/@@VERSION@@/0.0.0/" -e "s/@@SHA256@@/$(printf '0%.0s' {1..64})/" \
+            packaging/homebrew/cursorwrap.rb.tmpl > /tmp/cursorwrap.rb
+          ruby -c /tmp/cursorwrap.rb
