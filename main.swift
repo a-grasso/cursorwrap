@@ -15,6 +15,9 @@ struct Config {
     var useWarp = false             // relocate with CGWarp instead of rewriting the event
     var dryRun = false
     var verbose = false
+    var flight = true               // the flight recorder is on unless asked otherwise
+    var flightPath = ""             // empty means ~/Library/Logs/cursorwrap/flight.log
+    var flightSlowMs = 20.0         // callbacks at or above this reach the disk trail
 }
 
 var cfg = Config()
@@ -63,6 +66,10 @@ while ai < argv.count {
         print("cursorwrap \(version)")
         exit(0)
     case "--log":           openLog(nextArg("--log"))
+    case "--no-flight":     cfg.flight = false
+    case "--flight-log":    cfg.flightPath = nextArg("--flight-log")
+    case "--flight-slow-ms":
+        cfg.flightSlowMs = Double(nextArg("--flight-slow-ms")) ?? cfg.flightSlowMs
     case "-h", "--help":
         print("""
         cursorwrap \(version)
@@ -70,6 +77,10 @@ while ai < argv.count {
           --displays          print display geometry and exit
           --version           print the version and exit
           --log PATH          mirror output to PATH (truncated each run)
+          --flight-log PATH   flight recorder trail (default
+                              ~/Library/Logs/cursorwrap/flight.log)
+          --flight-slow-ms N  record callbacks taking at least N ms (default 20)
+          --no-flight         turn the flight recorder off
           --min-overshoot N   intended travel past the edge before crossing (default 6)
           --carry-max N       land N px past the far edge (default 0 = on the edge)
           --cooldown S        seconds to ignore edges after a crossing (default 0.05)
@@ -87,6 +98,156 @@ while ai < argv.count {
     ai += 1
 }
 
+// MARK: - flight recorder
+
+// The freeze this exists for strikes minutes apart, only around wake, and
+// leaves no spindump behind, so catching it in the act has not worked. The app
+// therefore records itself continuously: a fixed ring in memory for the fine
+// detail, and a low-volume trail on disk that survives a kill -9. Nothing here
+// does I/O on the thread the tap callback runs on. The callback only stamps a
+// slot in the ring; a background thread does every write.
+
+enum Flight: UInt8 {
+    case callback = 0, wrap, tapDisabled, reconfig, displays, wake, sleeping, started
+}
+
+struct FlightRecord {
+    var t: CFAbsoluteTime = 0
+    var kind: UInt8 = 0
+    var a = 0.0, b = 0.0, c = 0.0, d = 0.0
+}
+
+let flightCapacity = 8192
+let flightRing: UnsafeMutablePointer<FlightRecord> = {
+    let p = UnsafeMutablePointer<FlightRecord>.allocate(capacity: flightCapacity)
+    p.initialize(repeating: FlightRecord(), count: flightCapacity)
+    return p
+}()
+var flightHead = 0            // only ever advanced by the thread running the tap
+var flightDumpAll = false     // set by SIGUSR1, cleared by the drain thread
+
+// Allocation free and lock free by construction: one writer, one reader, and a
+// ring the reader is allowed to fall behind on. Losing the oldest records under
+// a burst is the right trade for never blocking the pointer.
+@inline(__always)
+func flightRecord(_ k: Flight, _ a: Double = 0, _ b: Double = 0,
+                  _ c: Double = 0, _ d: Double = 0) {
+    let slot = flightRing + (flightHead % flightCapacity)
+    slot.pointee.t = CFAbsoluteTimeGetCurrent()
+    slot.pointee.kind = k.rawValue
+    slot.pointee.a = a; slot.pointee.b = b; slot.pointee.c = c; slot.pointee.d = d
+    flightHead &+= 1
+}
+
+let flightStamp: DateFormatter = {
+    let f = DateFormatter()
+    f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+    return f
+}()
+
+func flightFormat(_ r: FlightRecord) -> String {
+    let when = flightStamp.string(from: Date(timeIntervalSinceReferenceDate: r.t))
+    switch Flight(rawValue: r.kind) ?? .callback {
+    case .callback:
+        return String(format: "%@ slow callback type=%.0f %.2f ms", when, r.a, r.b)
+    case .wrap:
+        return String(format: "%@ wrap -> (%.0f, %.0f) overshoot=%.0f displays=%.0f",
+                      when, r.a, r.b, r.c, r.d)
+    case .tapDisabled:
+        return String(format: "%@ TAP DISABLED type=%.0f total=%.0f, re-enabling", when, r.a, r.b)
+    case .reconfig:
+        return String(format: "%@ display reconfiguration flags=0x%llx", when, UInt64(max(0, r.a)))
+    case .displays:
+        return String(format: "%@ display refresh %@ count=%.0f", when,
+                      r.a > 0 ? "ok" : "FAILED, cache left dirty and stale", r.b)
+    case .wake:     return String(format: "%@ WAKE (%.0f)", when, r.a)
+    case .sleeping: return String(format: "%@ sleep (%.0f)", when, r.a)
+    case .started:  return String(format: "%@ started", when)
+    }
+}
+
+// Everything is worth keeping except ordinary fast callbacks, which are the
+// overwhelming majority and would otherwise bury the trail.
+func flightNotable(_ r: FlightRecord) -> Bool {
+    guard let k = Flight(rawValue: r.kind) else { return true }
+    return k != .callback || r.b >= cfg.flightSlowMs
+}
+
+var flightFD: Int32 = -1
+
+func flightWrite(_ s: String) {
+    guard flightFD >= 0, let d = (s + "\n").data(using: .utf8) else { return }
+    d.withUnsafeBytes { _ = write(flightFD, $0.baseAddress, $0.count) }
+}
+
+func flightStart() {
+    guard cfg.flight else { return }
+    let path = cfg.flightPath.isEmpty
+        ? NSHomeDirectory() + "/Library/Logs/cursorwrap/flight.log"
+        : cfg.flightPath
+    try? FileManager.default.createDirectory(
+        atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+    flightFD = open(path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
+    guard flightFD >= 0 else { log("flight recorder: cannot open \(path)"); return }
+    log("flight recorder: \(path)")
+
+    // kill -USR1 spills the whole in-memory ring, for the fine detail around a
+    // freeze that the notable-only trail deliberately leaves out.
+    signal(SIGUSR1) { _ in flightDumpAll = true }
+
+    let nc = NSWorkspace.shared.notificationCenter
+    nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil) { _ in
+        flightRecord(.wake, 1)
+    }
+    nc.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: nil) { _ in
+        flightRecord(.wake, 2)
+    }
+    nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: nil) { _ in
+        flightRecord(.sleeping, 1)
+    }
+    nc.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: nil) { _ in
+        flightRecord(.sleeping, 2)
+    }
+
+    flightRecord(.started)
+    Thread.detachNewThread {
+        var tail = 0
+        var lastBeat = CFAbsoluteTimeGetCurrent()
+        var lastCrossings = 0
+        while true {
+            usleep(500_000)
+            let head = flightHead
+            let dumpAll = flightDumpAll
+            if dumpAll { flightDumpAll = false; tail = max(tail, head - flightCapacity) }
+            if head - tail > flightCapacity {
+                flightWrite("... ring overran, \(head - tail - flightCapacity) records lost")
+                tail = head - flightCapacity
+            }
+            while tail < head {
+                let r = flightRing[tail % flightCapacity]
+                if dumpAll || flightNotable(r) { flightWrite(flightFormat(r)) }
+                tail += 1
+            }
+            let now = CFAbsoluteTimeGetCurrent()
+            if now - lastBeat >= 60 {
+                lastBeat = now
+                flightWrite(String(format:
+                    "%@ heartbeat crossings=%d (+%d) tap-disables=%d displays=%d dirty=%@",
+                    flightStamp.string(from: Date()), crossings, crossings - lastCrossings,
+                    tapDisables, displays.count, displaysDirty ? "yes" : "no"))
+                lastCrossings = crossings
+            }
+            // Always on means it has to stay bounded without a logrotate.
+            if let a = try? FileManager.default.attributesOfItem(atPath: path),
+               let size = a[.size] as? Int, size > 8_000_000 {
+                _ = ftruncate(flightFD, 0)
+                _ = lseek(flightFD, 0, SEEK_SET)
+                flightWrite("... trail truncated at 8 MB")
+            }
+        }
+    }
+}
+
 // MARK: - display geometry (CG global space: top-left origin, y down)
 
 var displays: [CGRect] = []
@@ -95,16 +256,24 @@ var displaysDirty = true
 @discardableResult
 func refreshDisplays() -> Bool {
     var count: UInt32 = 0
-    guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else { return false }
+    guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else {
+        flightRecord(.displays, 0, Double(count))
+        return false
+    }
     var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
-    guard CGGetActiveDisplayList(count, &ids, &count) == .success else { return false }
+    guard CGGetActiveDisplayList(count, &ids, &count) == .success else {
+        flightRecord(.displays, 0, Double(count))
+        return false
+    }
     displays = ids.prefix(Int(count)).map { CGDisplayBounds($0) }
     displaysDirty = false
+    flightRecord(.displays, 1, Double(count))
     return true
 }
 
 func reconfigCB(_ d: CGDirectDisplayID, _ f: CGDisplayChangeSummaryFlags, _ u: UnsafeMutableRawPointer?) {
     displaysDirty = true
+    flightRecord(.reconfig, Double(f.rawValue))
 }
 
 let tol: CGFloat = 2.0
@@ -249,6 +418,7 @@ var lastLoc: CGPoint?
 var cooldownUntil: CFAbsoluteTime = 0
 var buttonsDown = 0
 var crossings = 0
+var tapDisables = 0
 var tapRef: CFMachPort?
 
 // Our own synthetic moves come back through the tap; tag them so we ignore them.
@@ -319,8 +489,15 @@ func tapCB(proxy: CGEventTapProxy,
            event: CGEvent,
            refcon: UnsafeMutableRawPointer?) -> Unmanaged<CGEvent>? {
     let pass = Unmanaged.passUnretained(event)
+    let entered = DispatchTime.now().uptimeNanoseconds
+    defer {
+        flightRecord(.callback, Double(type.rawValue),
+                     Double(DispatchTime.now().uptimeNanoseconds &- entered) / 1e6)
+    }
 
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        tapDisables += 1
+        flightRecord(.tapDisabled, Double(type.rawValue), Double(tapDisables))
         if let t = tapRef { CGEvent.tapEnable(tap: t, enable: true) }
         return pass
     }
@@ -358,6 +535,7 @@ func tapCB(proxy: CGEventTapProxy,
 
     crossings += 1
     cooldownUntil = now + cfg.cooldown
+    flightRecord(.wrap, Double(c.target.x), Double(c.target.y), c.overshoot, Double(displays.count))
     if cfg.verbose || cfg.dryRun {
         log(String(format: "cross #%d %@ overshoot=%.0f -> (%.0f, %.0f)%@",
                    crossings, c.label, c.overshoot, c.target.x, c.target.y,
@@ -395,6 +573,7 @@ func tapCB(proxy: CGEventTapProxy,
 // MARK: - main
 
 log("cursorwrap \(version)")
+flightStart()
 reportDisplays()
 log("min-overshoot=\(cfg.minOvershoot) carry-max=\(cfg.carryMax) cooldown=\(cfg.cooldown)s "
     + "vertical=\(cfg.vertical) warp=\(cfg.useWarp) dry-run=\(cfg.dryRun)")
