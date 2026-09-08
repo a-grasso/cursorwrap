@@ -2,7 +2,7 @@ import Cocoa
 
 // Single source of truth for the shipped version: build.sh reads it out of
 // here for Info.plist, and the release workflow refuses a tag that disagrees.
-let version = "0.2.0"
+let version = "0.2.1"
 
 // MARK: - config
 
@@ -108,7 +108,7 @@ while ai < argv.count {
 // slot in the ring; a background thread does every write.
 
 enum Flight: UInt8 {
-    case callback = 0, wrap, tapDisabled, reconfig, displays, wake, sleeping, started
+    case callback = 0, wrap, tapDisabled, reconfig, displays, wake, sleeping, started, watchdog
 }
 
 struct FlightRecord {
@@ -163,6 +163,9 @@ func flightFormat(_ r: FlightRecord) -> String {
     case .wake:     return String(format: "%@ WAKE (%.0f)", when, r.a)
     case .sleeping: return String(format: "%@ sleep (%.0f)", when, r.a)
     case .started:  return String(format: "%@ started", when)
+    case .watchdog:
+        return String(format: "%@ watchdog saw the display list change to %.0f, cache marked stale",
+                      when, r.a)
     }
 }
 
@@ -253,22 +256,51 @@ func flightStart() {
 var displays: [CGRect] = []
 var displaysDirty = true
 
+// Bounds rather than display IDs, because the arrangement changes in three
+// ways and only one of them adds or removes a display: dragging displays in
+// System Settings and changing a resolution both leave the ID list identical
+// while moving every rect the wrap is measured against.
+func liveDisplayBounds() -> [CGRect] {
+    var count: UInt32 = 0
+    guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else { return [] }
+    var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+    guard CGGetActiveDisplayList(count, &ids, &count) == .success else { return [] }
+    return ids.prefix(Int(count)).map { CGDisplayBounds($0) }
+}
+
 @discardableResult
 func refreshDisplays() -> Bool {
-    var count: UInt32 = 0
-    guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else {
-        flightRecord(.displays, 0, Double(count))
+    let live = liveDisplayBounds()
+    guard !live.isEmpty else {
+        flightRecord(.displays, 0, 0)
         return false
     }
-    var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
-    guard CGGetActiveDisplayList(count, &ids, &count) == .success else {
-        flightRecord(.displays, 0, Double(count))
-        return false
-    }
-    displays = ids.prefix(Int(count)).map { CGDisplayBounds($0) }
+    displays = live
     displaysDirty = false
-    flightRecord(.displays, 1, Double(count))
+    flightRecord(.displays, 1, Double(live.count))
     return true
+}
+
+// The reconfiguration callback below is the prompt path, but it cannot be the
+// only one: a bundle up since a single-display login was measured missing
+// every attach for five days, so the cache - and with it every wrap - stayed
+// pinned to a desk that no longer existed, and the pointer wrapped inside the
+// laptop panel while the user pushed at the outer edge of three displays.
+// Polling the list off the hot path costs one window-server round trip a
+// second and makes a stale cache self-healing whatever the callback does.
+// Only the flag is touched here; `displays` stays owned by the tap thread.
+func startDisplayWatchdog() {
+    Thread.detachNewThread {
+        var known = liveDisplayBounds()
+        while true {
+            usleep(1_000_000)
+            let now = liveDisplayBounds()
+            guard !now.isEmpty, now != known else { continue }
+            known = now
+            displaysDirty = true
+            flightRecord(.watchdog, Double(now.count))
+        }
+    }
 }
 
 func reconfigCB(_ d: CGDirectDisplayID, _ f: CGDisplayChangeSummaryFlags, _ u: UnsafeMutableRawPointer?) {
@@ -610,4 +642,5 @@ CFRunLoopAddSource(CFRunLoopGetCurrent(),
                    .commonModes)
 CGEvent.tapEnable(tap: tap, enable: true)
 log("tap active (modifying). push the pointer past an outer edge. ctrl-c to stop.")
+startDisplayWatchdog()
 CFRunLoopRun()
