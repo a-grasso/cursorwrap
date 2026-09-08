@@ -132,6 +132,14 @@ mouse events keep delivering deltas.
    the pointer's position on the other axis. Both the wall and the display you
    land on come from that same run, which is what makes the wrap adapt to any
    arrangement instead of to one particular desk.
+5. **Re-read the arrangement rather than trust being told about it.** The
+   geometry is cached, and `CGDisplayRegisterReconfigurationCallback` marks the
+   cache stale when displays come and go. That callback has been measured never
+   arriving at all: an agent up since a single-display login missed a
+   two-monitor attach for five days and kept wrapping inside the laptop panel
+   while the pointer was being pushed at the outer edge of a 5896px desktop. So
+   a watchdog re-reads the display list once a second, off the hot path, and
+   marks the cache stale on any change. The callback only makes it prompter.
 
 Measuring the wall per row but picking the destination from the whole desktop is
 what fired the pointer at a far display's clamped corner as soon as the
