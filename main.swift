@@ -2,7 +2,7 @@ import Cocoa
 
 // Single source of truth for the shipped version: build.sh reads it out of
 // here for Info.plist, and the release workflow refuses a tag that disagrees.
-let version = "0.2.1"
+let version = "0.2.2"
 
 // MARK: - config
 
@@ -109,6 +109,7 @@ while ai < argv.count {
 
 enum Flight: UInt8 {
     case callback = 0, wrap, tapDisabled, reconfig, displays, wake, sleeping, started, watchdog
+    case relocationLost
 }
 
 struct FlightRecord {
@@ -166,6 +167,10 @@ func flightFormat(_ r: FlightRecord) -> String {
     case .watchdog:
         return String(format: "%@ watchdog saw the display list change to %.0f, cache marked stale",
                       when, r.a)
+    case .relocationLost:
+        return String(format: "%@ RELOCATION LOST: the wrap to (%.0f, %.0f) left the pointer on "
+                            + "the wall at %.0f (%.0f so far); refusing that wall until the "
+                            + "pointer moves off it", when, r.a, r.b, r.c, r.d)
     }
 }
 
@@ -235,9 +240,10 @@ func flightStart() {
             if now - lastBeat >= 60 {
                 lastBeat = now
                 flightWrite(String(format:
-                    "%@ heartbeat crossings=%d (+%d) tap-disables=%d displays=%d dirty=%@",
+                    "%@ heartbeat crossings=%d (+%d) tap-disables=%d lost-relocations=%d "
+                    + "displays=%d dirty=%@",
                     flightStamp.string(from: Date()), crossings, crossings - lastCrossings,
-                    tapDisables, displays.count, displaysDirty ? "yes" : "no"))
+                    tapDisables, relocationsLost, displays.count, displaysDirty ? "yes" : "no"))
                 lastCrossings = crossings
             }
             // Always on means it has to stay bounded without a logrotate.
@@ -453,6 +459,18 @@ var crossings = 0
 var tapDisables = 0
 var tapRef: CFMachPort?
 
+// The wall the last wrap crossed, remembered until the pointer is seen off it,
+// and how many wraps have been refused because it never was. See wrappedWall's
+// use in decide() for what this is defending against.
+struct WrappedWall {
+    var axis: Axis
+    var forward: Bool
+    var at: CGFloat
+    var reported = false
+}
+var wrappedWall: WrappedWall?
+var relocationsLost = 0
+
 // Our own synthetic moves come back through the tap; tag them so we ignore them.
 let cwMagic: Int64 = 0x4357_5250
 let evSource = CGEventSource(stateID: .hidSystemState)
@@ -463,6 +481,11 @@ struct Crossing {
     var target: CGPoint
     var label: String
     var overshoot: Double
+    // Which wall this crossing left, so the caller can tell a wrap that moved
+    // the pointer from one that did not.
+    var axis: Axis
+    var forward: Bool
+    var wall: CGFloat
 }
 
 // Where a movement that just ran into a wall should land, or nil if it did not
@@ -511,10 +534,84 @@ func crossing(along axis: Axis, prev: CGPoint, loc: CGPoint, delta: Double) -> C
     case (.vertical, false):   label = "top -> bottom"
     }
     return Crossing(target: point(axis, travel: travel, cross: cross),
-                    label: label, overshoot: overshoot)
+                    label: label, overshoot: overshoot,
+                    axis: axis, forward: forward, wall: wall)
 }
 
 // MARK: - event tap
+
+// MARK: - what an event should cause
+
+// Stated in numbers rather than CGEvents, and kept out of the tap callback, so
+// a whole run of events can be driven in the tests. The freeze this guards
+// against is not a property of any single event - every event in it is judged
+// correctly on its own - only of what the state one event leaves behind does to
+// the next.
+enum Action: Equatable {
+    case pass
+    case relocate(CGPoint)
+}
+
+func decide(loc: CGPoint, dx: Double, dy: Double, now: CFAbsoluteTime) -> Action {
+    // A reconfiguration relocates the pointer as well as the geometry, so the
+    // remembered position is no longer this movement's origin. Dropping it
+    // costs one event's worth of overshoot instead of inventing one.
+    if displaysDirty, refreshDisplays() { lastLoc = nil; wrappedWall = nil }
+
+    // A wrap only counts once the pointer is somewhere else. Forget the wall as
+    // soon as an event shows the pointer off it, which after a relocation that
+    // worked is the very next event, since the far side of the desktop is not
+    // within tol of the wall it came from.
+    if let w = wrappedWall, abs(loc.on(w.axis) - w.at) > tol {
+        wrappedWall = nil
+    }
+
+    let prev = lastLoc ?? loc
+    lastLoc = loc
+
+    if now < cooldownUntil { return .pass }
+    if buttonsDown > 0 && !cfg.wrapWhileDragging { return .pass }
+
+    guard let c = crossing(prev: prev, loc: loc, dx: dx, dy: dy) else { return .pass }
+
+    // The pointer is still standing on the wall the last wrap crossed, so that
+    // relocation never happened: it was refused, or it was posted while the tap
+    // was disabled and went nowhere. Every event from here on describes that
+    // same crossing, and wrapping again just posts another move that will be
+    // dropped the same way - once per cooldown, for as long as the user keeps
+    // pushing, with the pointer welded to the edge the whole time. That is the
+    // input freeze of 2026-09-08, and it is a livelock, not a hang: the process
+    // is idle and healthy throughout. Refuse this wall instead and let the
+    // pointer move; wrapping stops working, which beats the pointer stopping.
+    if let w = wrappedWall, w.axis == c.axis, w.forward == c.forward {
+        if !w.reported {
+            wrappedWall?.reported = true
+            relocationsLost += 1
+            flightRecord(.relocationLost, Double(c.target.x), Double(c.target.y),
+                         Double(c.wall), Double(relocationsLost))
+        }
+        return .pass
+    }
+
+    crossings += 1
+    cooldownUntil = now + cfg.cooldown
+    flightRecord(.wrap, Double(c.target.x), Double(c.target.y), c.overshoot, Double(displays.count))
+    if cfg.verbose || cfg.dryRun {
+        log(String(format: "cross #%d %@ overshoot=%.0f -> (%.0f, %.0f)%@",
+                   crossings, c.label, c.overshoot, c.target.x, c.target.y,
+                   cfg.dryRun ? "  [dry-run]" : ""))
+    }
+    // Nothing is relocated in a dry run, so the pointer is going to stay on the
+    // wall. Remembering it would refuse every later crossing of that edge and
+    // the run would report one wrap where the real thing does many.
+    guard !cfg.dryRun else { return .pass }
+
+    lastLoc = c.target
+    wrappedWall = WrappedWall(axis: c.axis, forward: c.forward, at: c.wall)
+    return .relocate(c.target)
+}
+
+// MARK: - event tap callback
 
 func tapCB(proxy: CGEventTapProxy,
            type: CGEventType,
@@ -547,37 +644,14 @@ func tapCB(proxy: CGEventTapProxy,
 
     if event.getIntegerValueField(.eventSourceUserData) == cwMagic { return pass }
 
-    // A reconfiguration relocates the pointer as well as the geometry, so the
-    // remembered position is no longer this movement's origin. Dropping it
-    // costs one event's worth of overshoot instead of inventing one.
-    if displaysDirty, refreshDisplays() { lastLoc = nil }
-
-    let loc = event.location
-    let prev = lastLoc ?? loc
-    lastLoc = loc
-
-    let now = CFAbsoluteTimeGetCurrent()
-    if now < cooldownUntil { return pass }
-    if buttonsDown > 0 && !cfg.wrapWhileDragging { return pass }
-
     let dx = Double(event.getIntegerValueField(.mouseEventDeltaX))
     let dy = Double(event.getIntegerValueField(.mouseEventDeltaY))
-
-    guard let c = crossing(prev: prev, loc: loc, dx: dx, dy: dy) else { return pass }
-
-    crossings += 1
-    cooldownUntil = now + cfg.cooldown
-    flightRecord(.wrap, Double(c.target.x), Double(c.target.y), c.overshoot, Double(displays.count))
-    if cfg.verbose || cfg.dryRun {
-        log(String(format: "cross #%d %@ overshoot=%.0f -> (%.0f, %.0f)%@",
-                   crossings, c.label, c.overshoot, c.target.x, c.target.y,
-                   cfg.dryRun ? "  [dry-run]" : ""))
-    }
-    guard !cfg.dryRun else { return pass }
-    lastLoc = c.target
+    guard case .relocate(let target) = decide(loc: event.location, dx: dx, dy: dy,
+                                              now: CFAbsoluteTimeGetCurrent())
+    else { return pass }
 
     if cfg.useWarp {
-        CGWarpMouseCursorPosition(c.target)
+        CGWarpMouseCursorPosition(target)
         _ = CGAssociateMouseAndMouseCursorPosition(boolean_t(1))
         return pass
     }
@@ -590,8 +664,8 @@ func tapCB(proxy: CGEventTapProxy,
     // the wall.
     guard let src = evSource,
           let moved = CGEvent(mouseEventSource: src, mouseType: .mouseMoved,
-                              mouseCursorPosition: c.target, mouseButton: .left) else {
-        CGWarpMouseCursorPosition(c.target)
+                              mouseCursorPosition: target, mouseButton: .left) else {
+        CGWarpMouseCursorPosition(target)
         _ = CGAssociateMouseAndMouseCursorPosition(boolean_t(1))
         return pass
     }

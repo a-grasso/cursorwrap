@@ -76,6 +76,44 @@ private func expectNothing(_ what: String, from p: CGPoint, dx: Double = 0, dy: 
     }
 }
 
+// Everything decide() carries between events, back to launch state.
+private func resetPipeline() {
+    lastLoc = nil
+    wrappedWall = nil
+    relocationsLost = 0
+    cooldownUntil = 0
+    crossings = 0
+    buttonsDown = 0
+}
+
+// A run of events through decide(), the way the window server would deliver
+// them: the pointer is clamped to the desktop, and `relocationLands` decides
+// whether a relocation the tap asks for actually moves it. Dropping the
+// relocation is not hypothetical - it is what the 2026-09-08 flight log shows,
+// eight wraps to the same edge in 700 ms with the pointer never leaving the
+// wall. Time is passed in rather than read so the cooldown is exact.
+private func drive(from start: CGPoint, dx: Double, dy: Double = 0,
+                   events: Int, relocationLands: Bool) -> (wraps: Int, ended: CGPoint) {
+    resetPipeline()
+    var at = start
+    var now: CFAbsoluteTime = 1000
+    var wraps = 0
+    for _ in 0 ..< events {
+        at = clampedMove(from: at, dx: dx, dy: dy)
+        if case .relocate(let target) = decide(loc: at, dx: dx, dy: dy, now: now) {
+            wraps += 1
+            if relocationLands { at = target }
+        }
+        now += 0.008
+    }
+    return (wraps, at)
+}
+
+private func expectCount(_ what: String, _ got: Int, _ want: Int) {
+    checks += 1
+    if got != want { fail(what, "got \(got), expected \(want)") }
+}
+
 // Terminates the process rather than returning a status, so the rest of
 // main.swift stays reachable code as far as the compiler is concerned.
 func runGeometryTests() {
@@ -173,6 +211,56 @@ func runGeometryTests() {
                       from: CGPoint(x: 0, y: 0), dx: 200)
         expectNothing("an empty display list has no bands",
                       from: CGPoint(x: 0, y: 0), dy: 200)
+    }
+
+    // Regression for the input freeze of 2026-09-08. These drive decide() over a
+    // sequence rather than crossing() over one event, because every individual
+    // crossing in that freeze was judged correctly; what went wrong is that the
+    // wrap left the pointer on the wall and the next event said the same thing
+    // again.
+    arrange("single display, relocation dropped", [laptop]) {
+        let run = drive(from: CGPoint(x: 1600, y: 500), dx: 40, events: 200,
+                        relocationLands: false)
+        // Before the guard this re-fired once per cooldown for as long as the
+        // user kept pushing: 200 events at 8 ms is 1.6 s, so about 32 wraps,
+        // with the pointer pinned to the edge the entire time.
+        expectCount("a wrap whose relocation is dropped is not tried again", run.wraps, 1)
+        expectCount("and the refusal is recorded once, not once per event", relocationsLost, 1)
+        checks += 1
+        if run.ended.x < laptop.maxX - 1 - tol {
+            fail("the pointer is left free to move rather than pinned",
+                 "ended at x=\(run.ended.x)")
+        }
+    }
+
+    arrange("single display, relocation lands", [laptop]) {
+        // The guard must not cost a working setup its wraps: the same push with
+        // the relocation honoured crosses the display over and over.
+        let run = drive(from: CGPoint(x: 1600, y: 500), dx: 40, events: 200,
+                        relocationLands: true)
+        checks += 1
+        if run.wraps < 3 {
+            fail("a wrap whose relocation lands keeps wrapping",
+                 "wrapped only \(run.wraps) times in 200 events")
+        }
+    }
+
+    arrange("single display, the far edge right after a wrap", [laptop]) {
+        // The guard is about one wall, not about wrapping at all. Landing at the
+        // left edge and pushing straight on has to wrap back immediately.
+        resetPipeline()
+        let now: CFAbsoluteTime = 1000
+        checks += 1
+        guard case .relocate(let landed) =
+                decide(loc: CGPoint(x: 1727, y: 500), dx: 40, dy: 0, now: now) else {
+            return fail("pushing off the right edge wraps", "got no relocation")
+        }
+        let at = clampedMove(from: landed, dx: -40, dy: 0)
+        checks += 1
+        if case .relocate = decide(loc: at, dx: -40, dy: 0, now: now + 0.1) {} else {
+            fail("the opposite edge still wraps right after a wrap",
+                 "pushing left from (\(at.x), \(at.y)) did not wrap")
+        }
     }
 
     for f in failures { log("FAIL \(f)") }

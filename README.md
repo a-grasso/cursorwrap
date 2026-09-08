@@ -140,6 +140,15 @@ mouse events keep delivering deltas.
    while the pointer was being pushed at the outer edge of a 5896px desktop. So
    a watchdog re-reads the display list once a second, off the hot path, and
    marks the cache stale on any change. The callback only makes it prompter.
+6. **Never wrap a wall the pointer is still standing on.** A wrap is a promise
+   that the pointer will turn up at the target. When the relocation is dropped
+   instead, the pointer is still pinned to the wall it just crossed, so the next
+   event describes the same crossing and the wrap re-fires - once per cooldown,
+   for as long as you keep pushing, with the pointer welded to the edge. That is
+   a livelock, and it reads as frozen input. Each wrap's wall is therefore held
+   until an event shows the pointer off it; a relocation that worked clears it
+   on the very next event, and one that did not simply stops the wrapping.
+   Wrapping degrading to not working beats the pointer degrading to not moving.
 
 Measuring the wall per row but picking the destination from the whole desktop is
 what fired the pointer at a far display's clamped corner as soon as the
